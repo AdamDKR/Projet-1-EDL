@@ -1,7 +1,10 @@
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
+import database
+import repository
 import services
 from app import app
 
@@ -175,6 +178,95 @@ def test_same_person_can_join_several_groups(client):
     second = new_group(client, members=["Alice"], name="Second")["members"][0]
     assert first["person_id"] == second["person_id"]
     assert first["id"] != second["id"]
+
+
+def test_member_and_person_ids_are_not_confused(client):
+    # Alice est la personne 2 mais le membre 3 : l'API doit toujours exposer l'id de membre.
+    new_group(client, members=["Zoé", "Alice"], name="First")
+    second = new_group(client, members=["Alice", "Bob"], name="Second")
+    alice, bob = second["members"]
+    assert alice["id"] != alice["person_id"]
+
+    url = f"/api/groups/{second['id']}/expenses"
+    body = {
+        "label": "Taxi",
+        "amount": "10",
+        "date": "2026-07-02",
+        "payer_id": alice["id"],
+        "participants": [alice["id"], bob["id"]],
+    }
+    expense = client.post(url, json=body).get_json()
+    assert expense["payer_id"] == alice["id"]
+    assert expense["payer"] == "Alice"
+    assert balances(client, second) == ["+5.00", "-5.00"]
+
+
+def test_person_id_is_not_accepted_as_payer(client):
+    new_group(client, members=["Zoé", "Alice"], name="First")
+    second = new_group(client, members=["Alice", "Bob"], name="Second")
+    alice, bob = second["members"]
+    # Le numéro de personne d'Alice ne correspond à aucun membre de ce groupe.
+    assert alice["person_id"] not in [alice["id"], bob["id"]]
+    url = f"/api/groups/{second['id']}/expenses"
+    body = {
+        "label": "Taxi",
+        "amount": "10",
+        "date": "2026-07-02",
+        "payer_id": alice["person_id"],
+        "participants": [alice["id"]],
+    }
+    assert client.post(url, json=body).status_code == 400
+
+
+def test_delete_expense_with_a_single_participant(client, group):
+    # Le schéma interdit de retirer le dernier participant, sauf par cascade.
+    alice = ids(group)[0]
+    expense_id = add(client, group, participants=[alice]).get_json()["id"]
+    url = f"/api/groups/{group['id']}/expenses/{expense_id}"
+    assert client.delete(url).status_code == 204
+    assert client.get(f"/api/groups/{group['id']}/expenses").get_json() == []
+
+
+def test_schema_rejects_expense_outside_the_stay(group):
+    # Double sécurité : même sans services.py, le trigger du schéma refuse la dépense.
+    person_id = group["members"][0]["person_id"]
+    with pytest.raises(sqlite3.IntegrityError):
+        with database.transaction() as conn:
+            repository.insert_expense(conn, group["id"], "Late", 100, "2026-07-09", person_id)
+
+
+@pytest.mark.parametrize("amount_cents", [10.5, "abc"])
+def test_schema_rejects_non_integer_amount(group, amount_cents):
+    person_id = group["members"][0]["person_id"]
+    with pytest.raises(sqlite3.IntegrityError):
+        with database.transaction() as conn:
+            repository.insert_expense(
+                conn, group["id"], "Odd", amount_cents, "2026-07-02", person_id
+            )
+
+
+@pytest.mark.parametrize("amount", ["10.00", "10.01", "10.02", "0.01", "0.02"])
+def test_sql_views_match_backend_balances(client, group, amount):
+    # L'ordre d'ajout (Chloé, Alice, Bob) diffère volontairement de l'ordre des id.
+    alice, bob, chloe = ids(group)
+    add(client, group, amount=amount, payer_id=bob, participants=[chloe, alice, bob])
+    response = client.get(f"/api/groups/{group['id']}/balances").get_json()
+    backend = [line["balance_cents"] for line in response]
+    with database.transaction() as conn:
+        rows = conn.execute(
+            "SELECT balance_cents FROM v_balance WHERE group_id = ? ORDER BY member_id",
+            [group["id"]],
+        ).fetchall()
+    assert [row["balance_cents"] for row in rows] == backend
+    assert sum(backend) == 0
+
+
+def test_simultaneous_first_requests_share_one_database():
+    def first_request(_):
+        return app.test_client().get("/api/groups").status_code
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        assert list(executor.map(first_request, range(8))) == [200] * 8
 
 
 def test_balances_are_separate_between_groups(client):

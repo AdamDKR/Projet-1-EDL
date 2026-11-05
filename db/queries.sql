@@ -19,7 +19,7 @@ INSERT INTO Member(person_id, group_id) VALUES (:person_id, :group_id);
 INSERT INTO Expense(label, amount_cents, date, person_id, group_id)
 VALUES (:label, :amount_cents, :date, :person_id, :group_id);
 
--- Ajouter un participant à une dépense (appeler dans l'ordre voulu : le 1er reçoit le reste)
+-- Ajouter un participant à une dépense (appeler dans l'ordre voulu : les centimes restants sont donnés un par un, en commençant par le 1er)
 INSERT INTO ExpenseParticipant(member_id, expense_id)
 VALUES (:member_id, :expense_id);
 
