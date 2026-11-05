@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Partage de frais{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+  <!-- Application Header -->
+  <header class="app-header">
+    <div class="header-container">
+      <a href="{{ url_for('home') }}" class="brand">
+        <span class="brand-icon">💰</span>
+        <span>Partage de frais</span>
+      </a>
+
+      <div class="header-actions">
+        {% if all_groups and all_groups|length > 0 %}
+        <div class="group-selector-wrapper">
+          <label for="group-select" class="group-selector-label">Groupe :</label>
+          <select id="group-select" class="group-select" title="Changer de groupe">
+            {% for g in all_groups %}
+            <option value="{{ g.id }}" {% if current_group and current_group.id == g.id %}selected{% endif %}>
+              {{ g.name or g.nom }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
+
+        <button type="button" class="btn btn-primary" id="open-new-group-modal" data-modal-target="modal-new-group">
+          + Nouveau groupe
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="main-content">
+
+    <!-- Flash Alerts Container -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+      <div class="alerts-container">
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category if category != 'error' else 'danger' }}">
+          <span>{{ message }}</span>
+          <button type="button" class="alert-close" aria-label="Fermer l'alerte">&times;</button>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    {% endwith %}
+
+    <!-- Group Banner -->
+    {% if current_group %}
+    <section class="group-banner">
+      <div class="group-banner-info">
+        <h1>{{ current_group.name or current_group.nom }}</h1>
+        <div class="group-banner-dates">
+          <span>📅 Séjour du <strong>{{ current_group.start_date_formatted or current_group.start_date or current_group.date_debut }}</strong> au <strong>{{ current_group.end_date_formatted or current_group.end_date or current_group.date_fin }}</strong></span>
+        </div>
+      </div>
+      <div class="group-banner-meta">
+        <span class="banner-pill">👥 {{ members|length if members else 0 }} membre{{ 's' if members and members|length > 1 else '' }}</span>
+        <span class="banner-pill">🧾 {{ expenses|length if expenses else 0 }} dépense{{ 's' if expenses and expenses|length > 1 else '' }}</span>
+        <span class="banner-pill">💶 Total : {{ total_spent_str or '0,00 €' }}</span>
+      </div>
+    </section>
+    {% endif %}
+
+    <!-- Page Specific Content -->
+    {% block content %}{% endblock %}
+
+  </main>
+
+  <!-- Modal Dialog: Create Group -->
+  <div id="modal-new-group" class="modal-backdrop" aria-hidden="true" role="dialog" aria-labelledby="modal-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modal-title">Créer un nouveau groupe</h2>
+        <button type="button" class="modal-close-btn" data-modal-close aria-label="Fermer">&times;</button>
+      </div>
+      <form method="post" action="{{ url_for('create_group') }}">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="new-group-name">Nom du groupe :</label>
+            <input type="text" id="new-group-name" name="name" class="form-control" placeholder="Ex : Vacances à Spa" required>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="new-group-start">Date de début :</label>
+              <input type="date" id="new-group-start" name="start_date" class="form-control" required>
+            </div>
+            <div class="form-group">
+              <label for="new-group-end">Date de fin :</label>
+              <input type="date" id="new-group-end" name="end_date" class="form-control" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="new-group-members">Membres (séparés par des virgules) :</label>
+            <input type="text" id="new-group-members" name="members" class="form-control" placeholder="Ex : Alice, Bob, Chloé">
+            <small class="form-help">Optionnel : vous pourrez aussi en ajouter plus tard.</small>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-modal-close>Annuler</button>
+          <button type="submit" class="btn btn-primary">Créer le groupe</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Application Footer -->
+  <footer class="app-footer">
+    <p>Partage de frais &bull; Gestion des dépenses entre amis &bull; UMONS</p>
+  </footer>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+</body>
+</html>
