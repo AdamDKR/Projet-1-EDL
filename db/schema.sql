@@ -29,7 +29,8 @@ CREATE TABLE Member (
 CREATE TABLE Expense (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     label        TEXT    NOT NULL CHECK (length(trim(label)) > 0),
-    amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),     -- montant strictement positif
+    -- nombre entier de centimes, strictement positif
+    amount_cents INTEGER NOT NULL CHECK (typeof(amount_cents) = 'integer' AND amount_cents > 0),
     date         TEXT    NOT NULL CHECK (date(date) = date),
     person_id    INTEGER NOT NULL REFERENCES Person(id),        -- le payeur
     group_id     INTEGER NOT NULL REFERENCES "Group"(id) ON DELETE CASCADE,
@@ -103,7 +104,8 @@ END;
 -- ---------------------------------------------------------------------
 
 -- Part de chaque participant. Part de base = montant / n (division entière).
--- Le reste (montant % n) va au premier participant ajouté (plus petit id).
+-- Les centimes restants (montant % n) sont donnés un par un, dans l'ordre d'ajout (id croissants) :
+-- avec 2 centimes restants, le premier et le deuxième participant en reçoivent chacun un.
 CREATE VIEW v_share AS
 SELECT
     ep.id         AS participant_id,
@@ -111,9 +113,9 @@ SELECT
     ep.member_id,
     e.group_id,
     e.amount_cents / COUNT(*) OVER w
-      + CASE WHEN ep.id = MIN(ep.id) OVER w
-             THEN e.amount_cents % COUNT(*) OVER w
-             ELSE 0 END AS share_cents
+      + CASE WHEN ROW_NUMBER() OVER (PARTITION BY ep.expense_id ORDER BY ep.id)
+                  <= e.amount_cents % COUNT(*) OVER w
+             THEN 1 ELSE 0 END AS share_cents
 FROM ExpenseParticipant ep
 JOIN Expense e ON e.id = ep.expense_id
 WINDOW w AS (PARTITION BY ep.expense_id);

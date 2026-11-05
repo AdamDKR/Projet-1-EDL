@@ -154,7 +154,7 @@ def list_expenses(conn, group_id):
 
 def add_expense(conn, group_id, data):
     group = get_group(conn, group_id)
-    group_member_ids = {member["id"] for member in group["members"]}
+    person_ids = {member["id"]: member["person_id"] for member in group["members"]}
 
     label = parse_text(data.get("label"), "label")
     amount_cents = parse_amount(data.get("amount"))
@@ -163,22 +163,22 @@ def add_expense(conn, group_id, data):
         raise ValidationError("The expense date must be within the stay.")
 
     payer_id = data.get("payer_id")
-    if not _is_id(payer_id) or payer_id not in group_member_ids:
+    if not _is_id(payer_id) or payer_id not in person_ids:
         raise ValidationError("The payer must belong to the group.")
 
     participants = data.get("participants")
     if not isinstance(participants, list) or not participants:
         raise ValidationError("An expense must have at least one participant.")
-    if not all(_is_id(member_id) and member_id in group_member_ids for member_id in participants):
+    if not all(_is_id(member_id) and member_id in person_ids for member_id in participants):
         raise ValidationError("All participants must belong to the group.")
     if len(set(participants)) != len(participants):
         raise ValidationError("A member can only participate once in an expense.")
 
     expense_id = repository.insert_expense(
-        conn, group_id, label, amount_cents, expense_date, payer_id
+        conn, group_id, label, amount_cents, expense_date, person_ids[payer_id]
     )
-    for position, member_id in enumerate(participants, start=1):
-        repository.insert_participant(conn, expense_id, member_id, position)
+    for member_id in participants:
+        repository.insert_participant(conn, expense_id, member_id)
     return next(e for e in list_expenses(conn, group_id) if e["id"] == expense_id)
 
 
