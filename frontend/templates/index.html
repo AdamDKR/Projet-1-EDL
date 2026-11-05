@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+
+{% block title %}
+{{ current_group.name or current_group.nom if current_group else "Partage de frais" }} - Partage de frais
+{% endblock %}
+
+{% block content %}
+
+{% if not current_group %}
+<div class="card" style="text-align: center; padding: 3rem 2rem;">
+  <span class="empty-state-icon">🏕️</span>
+  <h2>Bienvenue sur Partage de frais</h2>
+  <p style="color: var(--text-muted); margin: 0.75rem 0 1.5rem;">
+    Aucun groupe n'est sélectionné ou disponible. Créez votre premier séjour entre amis pour commencer !
+  </p>
+  <button type="button" class="btn btn-primary" data-modal-target="modal-new-group">
+    + Créer un nouveau groupe
+  </button>
+</div>
+{% else %}
+
+<!-- 1. Balances Section -->
+<section style="margin-bottom: 2rem;">
+  <div class="section-header">
+    <h2 class="section-title">
+      <span>⚖️ Soldes des membres</span>
+    </h2>
+    <span class="badge badge-zero-sum" title="La somme nette de tous les soldes vaut exactement 0 centime">
+      Somme = 0,00 € ✓
+    </span>
+  </div>
+
+  <div class="balances-grid">
+    {% for m in members_balances %}
+    <div class="balance-card {{ m.card_class }}">
+      <div class="balance-card-header">
+        <span class="balance-card-name">{{ m.name }}</span>
+        <span class="balance-status-badge {{ m.status_class }}">
+          {{ m.status_label }}
+        </span>
+      </div>
+      <div class="balance-card-amount">
+        {{ m.balance_str }}
+      </div>
+      <div style="font-size: 0.8rem; color: var(--text-muted);">
+        {% if m.balance_cents > 0 %}
+        Doit recevoir {{ m.abs_balance_str }}
+        {% elif m.balance_cents < 0 %}
+        Doit rembourser {{ m.abs_balance_str }}
+        {% else %}
+        Comptes équilibrés
+        {% endif %}
+      </div>
+    </div>
+    {% else %}
+    <p class="empty-state">Aucun membre dans ce groupe.</p>
+    {% endfor %}
+  </div>
+</section>
+
+<!-- 2. Settlements Section ("Qui doit combien à qui") -->
+<section class="settlements-section">
+  <div class="section-header" style="margin-bottom: 0.75rem;">
+    <h3 class="section-title" style="font-size: 1.1rem;">
+      <span>🤝 Règlements suggérés</span>
+    </h3>
+    <small style="color: var(--text-muted);">Qui doit combien à qui pour solder les comptes</small>
+  </div>
+
+  {% if settlements and settlements|length > 0 %}
+  <div class="settlements-list">
+    {% for s in settlements %}
+    <div class="settlement-item">
+      <span class="settlement-user">{{ s.debtor }}</span>
+      <span class="settlement-arrow">doit rembourser</span>
+      <span class="settlement-amount">{{ s.amount_str }}</span>
+      <span class="settlement-arrow">à</span>
+      <span class="settlement-user">{{ s.creditor }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-settlements">
+    <span>🎉</span>
+    <span>Tous les comptes sont équilibrés ! Aucun remboursement nécessaire.</span>
+  </div>
+  {% endif %}
+</section>
+
+<!-- 3. Expenses History & Sidebar Forms -->
+<div class="layout-split">
+
+  <!-- Left: Expense History Table -->
+  <section class="card">
+    <div class="card-header">
+      <h3 class="section-title" style="font-size: 1.1rem;">
+        <span>📋 Historique des dépenses</span>
+      </h3>
+      <span class="badge badge-participant">
+        {{ expenses|length }} dépense{{ 's' if expenses|length > 1 else '' }}
+      </span>
+    </div>
+
+    {% if expenses and expenses|length > 0 %}
+    <div class="table-responsive">
+      <table class="table-expenses">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Libellé</th>
+            <th>Payeur</th>
+            <th>Montant</th>
+            <th>Participants</th>
+            <th style="text-align: right;">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for exp in expenses %}
+          <tr>
+            <td style="white-space: nowrap; color: var(--text-muted); font-size: 0.85rem;">
+              {{ exp.date_formatted or exp.date }}
+            </td>
+            <td>
+              <strong style="color: var(--text-main);">{{ exp.label or exp.libelle }}</strong>
+            </td>
+            <td>
+              <span class="badge badge-payer">{{ exp.payer_name }}</span>
+            </td>
+            <td class="amount-cell">
+              {{ exp.amount_str }}
+            </td>
+            <td>
+              <div class="participants-badges">
+                {% for p in exp.participants_details %}
+                <span class="badge badge-participant">{{ p.name }}</span>
+                {% endfor %}
+              </div>
+            </td>
+            <td style="text-align: right;">
+              <form method="post" action="{{ url_for('delete_expense', group_id=current_group.id, expense_id=exp.id) }}" style="display: inline;" onsubmit="return confirm('Confirmer la suppression de la dépense « {{ exp.label or exp.libelle }} » ?');">
+                <button type="submit" class="btn btn-sm btn-danger" title="Supprimer la dépense">
+                  Supprimer
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <span class="empty-state-icon">🧾</span>
+      <p style="font-weight: 500;">Aucune dépense enregistrée pour le moment.</p>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">
+        Utilisez le formulaire ci-contre pour ajouter la première dépense.
+      </p>
+    </div>
+    {% endif %}
+  </section>
+
+  <!-- Right: Forms Sidebar -->
+  <aside class="sidebar-forms">
+
+    <!-- Card: Add Expense -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="section-title" style="font-size: 1.05rem;">
+          <span>➕ Ajouter une dépense</span>
+        </h3>
+      </div>
+      <div class="card-body">
+        {% if members and members|length > 0 %}
+        <form id="expense-form" method="post" action="{{ url_for('add_expense', group_id=current_group.id) }}">
+          
+          <div class="form-group">
+            <label for="expense-label">Libellé :</label>
+            <input type="text" id="expense-label" name="label" class="form-control" placeholder="Ex : Courses, Restaurant, Essence" required>
+          </div>
+
+          <div class="form-group">
+            <label for="expense-amount">Montant (€) :</label>
+            <input type="text" id="expense-amount" name="amount" class="form-control" placeholder="Ex : 30.00 ou 12,50" inputmode="decimal" required pattern="^[0-9]+([.,][0-9]{1,2})?$">
+            <small class="form-help">Montant positif avec au plus 2 décimales.</small>
+          </div>
+
+          <div class="form-group">
+            <label for="expense-date">Date de la dépense :</label>
+            <input type="date" id="expense-date" name="date" class="form-control"
+                   min="{{ current_group.start_date or current_group.date_debut }}"
+                   max="{{ current_group.end_date or current_group.date_fin }}"
+                   value="{{ current_group.start_date or current_group.date_debut }}"
+                   required>
+            <small class="form-help">
+              Du {{ current_group.start_date_formatted or current_group.start_date or current_group.date_debut }} au {{ current_group.end_date_formatted or current_group.end_date or current_group.date_fin }} inclus.
+            </small>
+          </div>
+
+          <div class="form-group">
+            <label for="expense-payer">Payé par :</label>
+            <select id="expense-payer" name="payer_id" class="form-control" required>
+              {% for m in members %}
+              <option value="{{ m.id }}">{{ m.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="form-group">
+            <div class="form-header-toggle">
+              <label>Partagé entre :</label>
+              <button type="button" id="toggle-all-participants" class="btn-link">Tout désélectionner</button>
+            </div>
+            <div id="participants-list" class="checkbox-group">
+              {% for m in members %}
+              <label class="checkbox-label">
+                <input type="checkbox" name="participants" value="{{ m.id }}" checked>
+                <span>{{ m.name }}</span>
+              </label>
+              {% endfor %}
+            </div>
+            <div id="participants-error" class="validation-error" style="display: none;"></div>
+            <small class="form-help">Cochez les membres concernés par ce partage.</small>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-block" style="margin-top: 1.25rem;">
+            Enregistrer la dépense
+          </button>
+        </form>
+        {% else %}
+        <p style="color: var(--text-muted); font-size: 0.9rem;">
+          Veuillez d'abord ajouter des membres à ce groupe avant d'enregistrer une dépense.
+        </p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Card: Add Member -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="section-title" style="font-size: 1.05rem;">
+          <span>👤 Ajouter un membre</span>
+        </h3>
+      </div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('add_member', group_id=current_group.id) }}">
+          <div class="form-group">
+            <label for="new-member-name">Nom du nouveau membre :</label>
+            <input type="text" id="new-member-name" name="name" class="form-control" placeholder="Ex : David" required>
+          </div>
+          <button type="submit" class="btn btn-secondary btn-block">
+            + Ajouter au groupe
+          </button>
+        </form>
+      </div>
+    </div>
+
+  </aside>
+
+</div>
+
+{% endif %}
+
+{% endblock %}
