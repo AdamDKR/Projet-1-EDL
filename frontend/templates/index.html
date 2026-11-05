@@ -11,11 +11,21 @@
   <span class="empty-state-icon">🏕️</span>
   <h2>Bienvenue sur Partage de frais</h2>
   <p style="color: var(--text-muted); margin: 0.75rem 0 1.5rem;">
-    Aucun groupe n'est sélectionné ou disponible. Créez votre premier séjour entre amis pour commencer !
+    Aucun groupe n'est sélectionné ou disponible. Créez votre premier séjour entre amis ou chargez l'exemple du sujet !
   </p>
-  <button type="button" class="btn btn-primary" data-modal-target="modal-new-group">
-    + Créer un nouveau groupe
-  </button>
+  <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+    <button type="button" class="btn btn-primary" data-modal-target="modal-new-group">
+      + Créer un nouveau groupe
+    </button>
+    <button type="button" class="btn btn-secondary" data-modal-target="modal-new-account">
+      👤 Créer un compte
+    </button>
+    <form method="post" action="{{ url_for('seed_sample_data') }}" style="display: inline;">
+      <button type="submit" class="btn" style="background-color: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-main);">
+        🌱 Charger l'exemple (Vacances à Spa)
+      </button>
+    </form>
+  </div>
 </div>
 {% else %}
 
@@ -245,7 +255,15 @@
         <form method="post" action="{{ url_for('add_member', group_id=current_group.id) }}">
           <div class="form-group">
             <label for="new-member-name">Nom du nouveau membre :</label>
-            <input type="text" id="new-member-name" name="name" class="form-control" placeholder="Ex : David" required>
+            <input type="text" id="new-member-name" name="name" class="form-control" placeholder="Ex : David" list="registered-accounts" required>
+            {% if all_accounts and all_accounts|length > 0 %}
+            <datalist id="registered-accounts">
+              {% for acc in all_accounts %}
+              <option value="{{ acc.name }}">
+              {% endfor %}
+            </datalist>
+            <small class="form-help">Tapez un nom ou sélectionnez un compte utilisateur existant.</small>
+            {% endif %}
           </div>
           <button type="submit" class="btn btn-secondary btn-block">
             + Ajouter au groupe

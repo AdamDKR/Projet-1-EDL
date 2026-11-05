@@ -43,6 +43,30 @@ def find_person_id_by_name(conn, name):
     return row["id"] if row is not None else None
 
 
+def list_persons(conn):
+    rows = conn.execute("SELECT id, name FROM Person ORDER BY name, id").fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_person(conn, person_id):
+    row = conn.execute("SELECT id, name FROM Person WHERE id = ?", [person_id]).fetchone()
+    return dict(row) if row is not None else None
+
+
+def list_person_memberships(conn, person_id):
+    rows = conn.execute(
+        """
+        SELECT m.id AS member_id, m.group_id, g.name AS group_name, g.start_date, g.end_date
+        FROM Member m
+        JOIN "Group" g ON g.id = m.group_id
+        WHERE m.person_id = ?
+        ORDER BY g.start_date, g.id
+        """,
+        [person_id],
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def insert_person(conn, name):
     return conn.execute("INSERT INTO Person (name) VALUES (?)", [name]).lastrowid
 

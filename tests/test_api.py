@@ -329,3 +329,56 @@ def test_home_serves_the_frontend(client, tmp_path, monkeypatch):
     assert response.status_code == 200
     assert b"Expense sharing" in response.data
     response.close()
+
+
+# --- Comptes utilisateurs & intégration Web ---
+
+
+def test_create_and_list_accounts_api(client):
+    res = client.post("/api/accounts", json={"name": "Martin"})
+    assert res.status_code == 201
+    account = res.get_json()
+    assert account["name"] == "Martin"
+    assert "id" in account
+
+    # Duplicate account name rejected
+    dup = client.post("/api/accounts", json={"name": "Martin"})
+    assert dup.status_code == 400
+
+    # Empty name rejected
+    empty = client.post("/api/accounts", json={"name": "   "})
+    assert empty.status_code == 400
+
+    # List accounts
+    listed = client.get("/api/accounts").get_json()
+    assert any(a["name"] == "Martin" for a in listed)
+
+
+def test_web_routes_and_account_creation_flow(client):
+    # Home empty state
+    res = client.get("/")
+    assert res.status_code == 200
+    assert "Bienvenue sur Partage de frais" in res.text
+
+    # Seed sample data
+    seed = client.post("/seed-sample-data", follow_redirects=True)
+    assert seed.status_code == 200
+    assert "Vacances à Spa" in seed.text
+    assert "Alice" in seed.text
+    assert "Courses" in seed.text
+
+    # Accounts view
+    acc_page = client.get("/accounts")
+    assert acc_page.status_code == 200
+    assert "Comptes Utilisateurs" in acc_page.text
+
+    # Create account from web form
+    new_acc = client.post("/accounts", data={"name": "Nicolas"}, follow_redirects=True)
+    assert new_acc.status_code == 200
+    assert "Nicolas" in new_acc.text
+
+    # Add member from web form
+    add_m = client.post("/groups/1/members", data={"name": "Nicolas"}, follow_redirects=True)
+    assert add_m.status_code == 200
+    assert "Nicolas" in add_m.text
+

@@ -30,6 +30,8 @@ All routes start with `/api`. Requests and responses use JSON, so send the `Cont
 | POST | `/api/groups/<id>/expenses` | Add an expense | 201 |
 | DELETE | `/api/groups/<id>/expenses/<expense_id>` | Delete an expense | 204, no content |
 | GET | `/api/groups/<id>/balances` | Get member balances | 200 |
+| GET | `/api/accounts` | List user accounts and global balances | 200 |
+| POST | `/api/accounts` | Create a user account | 201 |
 
 ## Errors
 

@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+
+{% block title %}Comptes Utilisateurs - Partage de frais{% endblock %}
+
+{% block content %}
+
+<div class="section-header" style="margin-bottom: 1.5rem;">
+  <div>
+    <h1 style="font-size: 1.6rem; margin-bottom: 0.25rem;">👥 Comptes Utilisateurs</h1>
+    <p style="color: var(--text-muted); font-size: 0.95rem;">
+      Gestion des personnes et récapitulatif de leurs soldes à travers l'ensemble des séjours.
+    </p>
+  </div>
+  <button type="button" class="btn btn-primary" data-modal-target="modal-new-account">
+    + Nouveau compte
+  </button>
+</div>
+
+<div class="layout-split">
+
+  <!-- Left: Registered Accounts List -->
+  <section class="card">
+    <div class="card-header">
+      <h3 class="section-title" style="font-size: 1.1rem;">
+        <span>📋 Comptes enregistrés</span>
+      </h3>
+      <span class="badge badge-participant">
+        {{ all_accounts|length }} compte{{ 's' if all_accounts|length > 1 else '' }}
+      </span>
+    </div>
+
+    {% if all_accounts and all_accounts|length > 0 %}
+    <div class="table-responsive">
+      <table class="table-expenses">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Nom de la personne</th>
+            <th>Nombre de séjours</th>
+            <th>Séjours associés</th>
+            <th style="text-align: right;">Bilan global</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for acc in all_accounts %}
+          <tr>
+            <td style="color: var(--text-muted); font-weight: 500;">
+              #{{ acc.id }}
+            </td>
+            <td>
+              <strong style="color: var(--text-main); font-size: 1rem;">{{ acc.name }}</strong>
+            </td>
+            <td>
+              <span class="badge badge-participant">{{ acc.groups_count }} séjour{{ 's' if acc.groups_count > 1 else '' }}</span>
+            </td>
+            <td>
+              {% if acc.groups and acc.groups|length > 0 %}
+              <div style="display: flex; flex-direction: column; gap: 0.35rem;">
+                {% for g in acc.groups %}
+                <div style="font-size: 0.85rem;">
+                  <a href="{{ url_for('home', group_id=g.group_id) }}" style="color: var(--primary-color); text-decoration: none;">
+                    🏖️ {{ g.group_name }}
+                  </a>
+                  <span style="color: var(--text-muted);">:</span>
+                  <strong style="color: {{ 'var(--success-color, #16a34a)' if g.balance_cents > 0 else ('var(--danger-color, #dc2626)' if g.balance_cents < 0 else 'var(--text-muted)') }};">
+                    {{ g.balance_str }}
+                  </strong>
+                </div>
+                {% endfor %}
+              </div>
+              {% else %}
+              <span style="color: var(--text-muted); font-size: 0.85rem;">Aucun séjour pour l'instant</span>
+              {% endif %}
+            </td>
+            <td style="text-align: right;">
+              <span class="balance-status-badge {{ 'status-positive' if acc.total_balance_cents > 0 else ('status-negative' if acc.total_balance_cents < 0 else 'status-neutral') }}" style="font-weight: 600; font-size: 0.95rem;">
+                {{ acc.total_balance_str }}
+              </span>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <span class="empty-state-icon">👤</span>
+      <p style="font-weight: 500;">Aucun compte utilisateur enregistré.</p>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">
+        Créez votre premier compte avec le formulaire ci-contre.
+      </p>
+    </div>
+    {% endif %}
+  </section>
+
+  <!-- Right: Create Account Form Card -->
+  <aside class="sidebar-forms">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="section-title" style="font-size: 1.05rem;">
+          <span>👤 Créer un compte utilisateur</span>
+        </h3>
+      </div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('create_account') }}">
+          <div class="form-group">
+            <label for="side-account-name">Nom complet ou pseudo :</label>
+            <input type="text" id="side-account-name" name="name" class="form-control" placeholder="Ex : Alice Martin" required>
+            <small class="form-help">
+              Le compte est immédiatement enregistré dans la base et peut participer aux différents séjours.
+            </small>
+          </div>
+
+          {% if all_groups and all_groups|length > 0 %}
+          <div class="form-group">
+            <label for="side-group-select">Associer directement à un séjour (optionnel) :</label>
+            <select id="side-group-select" name="redirect_group_id" class="form-control">
+              <option value="">-- Ne pas associer pour le moment --</option>
+              {% for g in all_groups %}
+              <option value="{{ g.id }}">{{ g.name or g.nom }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" name="add_to_current_group" value="1" checked>
+              <span>Ajouter automatiquement comme membre du séjour sélectionné</span>
+            </label>
+          </div>
+          {% endif %}
+
+          <button type="submit" class="btn btn-primary btn-block" style="margin-top: 1rem;">
+            Enregistrer le compte
+          </button>
+        </form>
+      </div>
+    </div>
+  </aside>
+
+</div>
+
+{% endblock %}

@@ -2,164 +2,108 @@
 
 > **Noter les dépenses d’un séjour entre amis et savoir à tout moment qui doit combien à qui.**
 
-Séance 1 · En binôme · Comme vous le faites d’habitude, avec ou sans IA, ChatGPT compris.
-
-[Démarrer](#démarrer)
-
-## Le contexte
-
-Un groupe d’amis part une semaine en vacances. Chacun paie des choses pour les autres : les courses pour tout le monde, l’essence pour ceux qui sont dans la voiture, une activité pour une partie du groupe. Les tickets s’accumulent, et à la fin plus personne ne sait qui doit combien à qui.
-
-## Les données
-
-| Objet | Ce qu’on enregistre |
-|---|---|
-| **Groupe** | nom, dates du séjour, membres |
-| **Dépense** | libellé, montant, date, payeur, participants |
-
-## Ce que l’application doit faire
-
-- [ ] Créer un groupe et ses membres
-- [ ] Ajouter ou supprimer une dépense
-- [ ] Afficher le solde de chaque membre
-
-## Les règles
-
-- Une dépense a un montant positif et au moins un participant.
-- Le payeur et les participants appartiennent au groupe.
-- La date d’une dépense est comprise dans le séjour, dates de début et de fin incluses.
-- Une dépense est partagée à parts égales entre ses participants. Le centime restant va au premier participant ajouté.
-- Les soldes sont exacts au centime près et leur somme vaut toujours 0.
-
-## Pour vérifier
-
-Groupe : Alice, Bob et Chloé. Les lignes s’enchaînent.
-
-| Action | Résultat attendu |
-|---|---|
-| Alice paie 30 € pour Alice, Bob et Chloé | Alice +20,00 ; Bob −10,00 ; Chloé −10,00 |
-| Une dépense datée hors du séjour | Refusée, soldes inchangés |
-| Une dépense de 0 € | Refusée, soldes inchangés |
-| Sur un nouveau groupe, Alice paie 10 € pour les trois | Alice +6,66 ; Bob −3,33 ; Chloé −3,33 |
-
-## Si vous avez fini
-
-Modifier une dépense, filtrer les dépenses par membre ou par période, exporter en CSV.
-
-## Ce qui est libre
-
-Le framework (Flask ou Streamlit), l’organisation du code et l’interface. La base SQLite est fournie avec des exemples, et vous pouvez la modifier. Python, SQLite et pytest sont imposés.
-
-## À la fin de la séance
-
-- Le but : une application qui fonctionne, avec les fonctionnalités demandées.
-- Poussez votre travail sur GitHub.
+Séance 1 · En binôme · Master 1 Informatique — UMONS · Expertises digitale et logicielle.
 
 ---
 
-# Démarrer
+## Ce que fait l’application
 
-Python 3.11 ou plus est nécessaire.
+- [x] **Créer un groupe de séjour et ses membres** (avec dates de début et de fin).
+- [x] **Créer des comptes utilisateurs** (personnes réutilisables entre plusieurs séjours, consultation du bilan net global).
+- [x] **Ajouter ou supprimer une dépense partagée** (libellé, montant en euros, date du séjour, payeur, sélection des participants).
+- [x] **Afficher les soldes individuels et suggérer les règlements** (algorithme qui doit combien à qui).
+- [x] **Validation stricte de toutes les règles métier** :
+  - Montant positif au centime près.
+  - La somme de tous les soldes vaut toujours 0,00 €.
+  - Règle des centimes restants : distribués un à un aux premiers participants ajoutés.
+  - Date de la dépense strictement comprise dans les dates du séjour.
+  - Vérification de l'appartenance des membres et payeurs au groupe.
 
-## Préparer Git
+---
 
-Une seule fois par PC :
+## Installation et lancement
 
-```bash
-git config --global user.name "Votre nom"
-git config --global user.email "votre@adresse.be"
-```
+Python 3.11 ou supérieur est requis.
 
-GitHub n'accepte pas votre mot de passe dans le terminal. Si `git clone` refuse la connexion, installez [GitHub CLI](https://cli.github.com) et lancez `gh auth login`.
+### 1. Cloner et installer les dépendances
 
-## Créer votre dépôt
-
-1. Un membre du binôme ouvre <https://github.com/umons-ig/codelab-sans-agent>, clique sur **Use this template**, puis **Create a new repository**, et choisit **Private**.
-2. Dans **Settings**, puis **Collaborators**, il ajoute son partenaire. Le partenaire accepte l'invitation.
-3. Chacun récupère le dépôt sur sa machine, puis ouvre le dossier :
-
-```bash
-git clone <adresse-de-votre-dépôt>
-```
-
-## Choisir votre dossier
-
-- `code-streamlit` : le plus simple. [Premiers pas](https://docs.streamlit.io/get-started).
-- `code-flask` : plus de contrôle. [Démarrage rapide](https://flask.palletsprojects.com/en/stable/quickstart/).
-
-Gardez un dossier et supprimez l'autre. Chacun contient un `app.py` qui lit la base, l'affiche et donne un exemple de formulaire.
-
-## Installer et lancer
-
-Avec Streamlit, remplacez `code-flask` par `code-streamlit`.
-
-macOS ou Linux, depuis la racine du dépôt :
-
-```bash
-cd code-flask
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-pytest
-```
-
-Windows (PowerShell), depuis la racine du dépôt :
+Sous Windows (PowerShell) :
 
 ```powershell
-cd code-flask
 py -m venv .venv
 Set-ExecutionPolicy -Scope Process RemoteSigned
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+```
+
+Sous macOS ou Linux :
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+### 2. Lancer les tests
+
+```bash
 pytest
 ```
 
-Puis lancez l'application :
+> **271 tests** couvrent l'API REST, le moteur de règles métier, les cas limites et l'interface web.
 
-- Flask : `python app.py`, puis <http://127.0.0.1:5000>
-- Streamlit : `streamlit run app.py`
-
-Sur Mac, gardez `127.0.0.1` pour Flask. Avec `localhost`, vous pouvez tomber sur AirPlay, qui utilise aussi le port 5000, et obtenir une erreur 403.
-
-## Comprendre le code
-
-Vous travaillez dans `app.py`. `base.py` ouvre la base : vous n'avez pas besoin de le modifier.
-
-- **Flask** : chaque adresse a sa fonction. `accueil` lit la base et affiche `PAGE`, qui contient le HTML. `ajouter_membre` reçoit le formulaire, écrit dans la base et revient à l'accueil. Pour une nouvelle fonctionnalité, ajoutez un formulaire dans `PAGE` et une fonction.
-- **Streamlit** : le fichier s'exécute de haut en bas, puis à nouveau à chaque clic. Pour une nouvelle fonctionnalité, ajoutez vos champs, vos boutons et vos requêtes à la suite du fichier.
-
-## La base
-
-`base.sql` contient les tables et des exemples. `data.db` se crée au premier lancement. Pour repartir de zéro, ou après un changement de `base.sql`, supprimez `data.db`. [Documentation de `sqlite3`](https://docs.python.org/3/library/sqlite3.html).
-
-| Table | Colonnes |
-|---|---|
-| `groupes` | `id`, `nom`, `date_debut`, `date_fin` |
-| `membres` | `id`, `groupe_id`, `nom` |
-| `depenses` | `id`, `groupe_id`, `libelle`, `montant_centimes`, `date`, `payeur_id` |
-| `participants` | `depense_id`, `membre_id` |
-
-Les montants sont en centimes : 3000 = 30,00 €. Les dates sont au format `2026-07-02`. `participants` relie une dépense aux membres qui la partagent.
-
-## Travailler à deux
-
-Chacun travaille sur son PC. `git pull` avant de travailler, `git push` après chaque commit :
+### 3. Lancer l'application
 
 ```bash
-git pull
+python backend/app.py
 ```
 
-```bash
-git add -A
-git commit -m "ajout de la fonctionnalité"
-git push
+Puis ouvrez votre navigateur à l'adresse : **<http://127.0.0.1:5000>**
+
+*(Alternativement, `python frontend/dev_server.py` lance également la même application intégrée).*
+
+---
+
+## Structure du projet
+
+```
+Projet-1-EDL/
+├── backend/
+│   ├── app.py            # Point d'entrée principal Flask & routes Web
+│   ├── routes.py         # Routes API JSON REST (/api/...)
+│   ├── services.py       # Logique métier, calcul des soldes, règlements et validation
+│   ├── repository.py     # Requêtes SQL SQLite
+│   └── database.py       # Connexion SQLite et gestion des transactions
+├── db/
+│   ├── schema.sql        # Schéma de la base SQLite, triggers, vues v_share et v_balance
+│   └── queries.sql       # Requêtes de référence
+├── frontend/
+│   ├── templates/        # Templates Jinja2 (base.html, index.html, accounts.html)
+│   ├── static/css/       # Feuilles de style CSS modernes et responsives
+│   └── static/js/        # Interactions (modales, validation client, sélecteur)
+├── tests/
+│   ├── conftest.py       # Fixtures pytest (base de test temporaire isolée)
+│   ├── test_api.py       # Tests d'intégration de l'API et des routes web
+│   └── test_services.py  # Tests unitaires de la logique métier
+└── docs/
+    └── API.md            # Documentation exhaustive de l'API JSON
 ```
 
-Si `git push` est refusé, votre partenaire a poussé entre-temps. Récupérez son travail, puis poussez à nouveau :
+---
 
-```bash
-git pull --no-rebase --no-edit
-git push
-```
+## API REST
 
-En cas de conflit, corrigez les fichiers indiqués, puis faites `git add -A`, `git commit -m "fusion"` et `git push`.
+L'API est documentée dans [`docs/API.md`](docs/API.md). Toutes les routes retournent du JSON :
+
+| Méthode | URL | Description |
+|---|---|---|
+| `GET` | `/api/groups` | Lister les séjours |
+| `POST` | `/api/groups` | Créer un séjour |
+| `GET` | `/api/groups/<id>` | Détails d'un séjour et membres |
+| `POST` | `/api/groups/<id>/members` | Ajouter un membre au séjour |
+| `GET` | `/api/groups/<id>/expenses` | Lister les dépenses d'un séjour |
+| `POST` | `/api/groups/<id>/expenses` | Ajouter une dépense |
+| `DELETE` | `/api/groups/<id>/expenses/<expense_id>` | Supprimer une dépense |
+| `GET` | `/api/groups/<id>/balances` | Obtenir les soldes des membres |
+| `GET` | `/api/accounts` | Lister les comptes utilisateurs et soldes cumulés |
+| `POST` | `/api/accounts` | Créer un compte utilisateur |

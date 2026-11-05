@@ -82,3 +82,16 @@ def delete_expense(group_id, expense_id):
 def get_balances(group_id):
     with transaction() as conn:
         return jsonify(services.get_balances(conn, group_id))
+
+
+@api.get("/accounts")
+def list_accounts():
+    with transaction() as conn:
+        return jsonify(services.list_accounts(conn))
+
+
+@api.post("/accounts")
+def create_account():
+    data = json_body()
+    with transaction() as conn:
+        return jsonify(services.create_account(conn, data)), 201

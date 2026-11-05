@@ -188,6 +188,111 @@ def delete_expense(conn, group_id, expense_id):
         raise NotFoundError("This expense does not exist in this group.")
 
 
+# --- Formatting helpers & règlements ---
+
+
+def format_cents_fr(cents, signed=False):
+    """Ex: 3000 -> "30,00 €" ou "+20,00 €"."""
+    prefix = "-" if cents < 0 else ("+" if signed and cents > 0 else "")
+    euros, rem = divmod(abs(cents), 100)
+    return f"{prefix}{euros},{rem:02d} €"
+
+
+def format_date_fr(date_str):
+    """Ex: 2026-07-01 -> "01/07/2026"."""
+    if not date_str or not isinstance(date_str, str) or len(date_str) != 10:
+        return date_str
+    try:
+        parts = date_str.split("-")
+        return f"{parts[2]}/{parts[1]}/{parts[0]}"
+    except Exception:
+        return date_str
+
+
+def compute_settlements(balances, members_by_id):
+    """Calcule les remboursements nécessaires pour solder tous les comptes.
+
+    Algorithme glouton associant débiteurs et créditeurs.
+    """
+    debtors = []
+    creditors = []
+    for mid, bal in balances.items():
+        if bal < 0:
+            debtors.append([mid, -bal])
+        elif bal > 0:
+            creditors.append([mid, bal])
+
+    debtors.sort(key=lambda x: -x[1])
+    creditors.sort(key=lambda x: -x[1])
+
+    settlements = []
+    d_idx = 0
+    c_idx = 0
+    while d_idx < len(debtors) and c_idx < len(creditors):
+        debtor_id, debt = debtors[d_idx]
+        creditor_id, credit = creditors[c_idx]
+        payment = min(debt, credit)
+        if payment > 0:
+            settlements.append({
+                "debtor": members_by_id.get(debtor_id, f"Membre #{debtor_id}"),
+                "creditor": members_by_id.get(creditor_id, f"Membre #{creditor_id}"),
+                "amount_cents": payment,
+                "amount_str": format_cents_fr(payment),
+            })
+            debtors[d_idx][1] -= payment
+            creditors[c_idx][1] -= payment
+        if debtors[d_idx][1] == 0:
+            d_idx += 1
+        if creditors[c_idx][1] == 0:
+            c_idx += 1
+    return settlements
+
+
+# --- Gestion des comptes / personnes ---
+
+
+def create_account(conn, data):
+    """Crée un compte utilisateur (personne)."""
+    name = parse_text(data.get("name"), "name")
+    existing_id = repository.find_person_id_by_name(conn, name)
+    if existing_id is not None:
+        raise ValidationError(f'Un compte au nom de « {name} » existe déjà.')
+    person_id = repository.insert_person(conn, name)
+    return {"id": person_id, "name": name}
+
+
+def list_accounts(conn):
+    """Liste les comptes avec leur bilan global à travers tous les groupes."""
+    persons = repository.list_persons(conn)
+    accounts = []
+    for p in persons:
+        memberships = repository.list_person_memberships(conn, p["id"])
+        total_balance_cents = 0
+        groups_detail = []
+        for m in memberships:
+            group_balances = get_balances(conn, m["group_id"])
+            mb = next((b for b in group_balances if b["member_id"] == m["member_id"]), None)
+            bal = mb["balance_cents"] if mb else 0
+            total_balance_cents += bal
+            groups_detail.append({
+                "group_id": m["group_id"],
+                "group_name": m["group_name"],
+                "start_date": m["start_date"],
+                "end_date": m["end_date"],
+                "balance_cents": bal,
+                "balance_str": format_cents_fr(bal, signed=True),
+            })
+        accounts.append({
+            "id": p["id"],
+            "name": p["name"],
+            "groups_count": len(memberships),
+            "groups": groups_detail,
+            "total_balance_cents": total_balance_cents,
+            "total_balance_str": format_cents_fr(total_balance_cents, signed=True),
+        })
+    return accounts
+
+
 # --- Soldes ---
 
 
