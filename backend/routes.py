@@ -95,3 +95,10 @@ def create_account():
     data = json_body()
     with transaction() as conn:
         return jsonify(services.create_account(conn, data)), 201
+
+
+@api.post("/login")
+def login():
+    data = json_body()
+    with transaction() as conn:
+        return jsonify(services.authenticate_user(conn, data.get("name"), data.get("password"))), 200

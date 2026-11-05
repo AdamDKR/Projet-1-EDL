@@ -15,8 +15,9 @@ CREATE TABLE "Group" (
 );
 
 CREATE TABLE Person (
-    id   INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL CHECK (length(trim(name)) > 0)
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    name          TEXT NOT NULL CHECK (length(trim(name)) > 0),
+    password_hash TEXT DEFAULT NULL
 );
 
 CREATE TABLE Member (

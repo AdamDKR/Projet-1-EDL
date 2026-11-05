@@ -8,16 +8,28 @@
 
 {% if not current_group %}
 <div class="card" style="text-align: center; padding: 3rem 2rem;">
+  {% if current_user %}
   <span class="empty-state-icon">🏕️</span>
-  <h2>Bienvenue sur Partage de frais</h2>
+  <h2>Bienvenue sur Partage de frais, {{ current_user.name }} !</h2>
   <p style="color: var(--text-muted); margin: 0.75rem 0 1.5rem;">
-    Aucun groupe n'est sélectionné ou disponible. Créez votre premier séjour entre amis ou chargez l'exemple du sujet !
+    Vous ne faites partie d'aucun séjour actif pour le moment. Créez votre premier séjour entre amis (vous y serez automatiquement ajouté) !
   </p>
   <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
     <button type="button" class="btn btn-primary" data-modal-target="modal-new-group">
-      + Créer un nouveau groupe
+      + Créer un séjour
     </button>
-    <button type="button" class="btn btn-secondary" data-modal-target="modal-new-account">
+  </div>
+  {% else %}
+  <span class="empty-state-icon">🔒</span>
+  <h2>Bienvenue sur Partage de frais</h2>
+  <p style="color: var(--text-muted); margin: 0.75rem auto 1.5rem; max-width: 540px;">
+    Accédez à vos séjours de vacances et consultez vos soldes en temps réel. Identifiez-vous avec votre compte ou inscrivez-vous en quelques clics.
+  </p>
+  <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+    <button type="button" class="btn btn-secondary" data-modal-target="modal-login">
+      🔑 S'identifier
+    </button>
+    <button type="button" class="btn btn-primary" data-modal-target="modal-new-account">
       👤 Créer un compte
     </button>
     <form method="post" action="{{ url_for('seed_sample_data') }}" style="display: inline;">
@@ -26,6 +38,7 @@
       </button>
     </form>
   </div>
+  {% endif %}
 </div>
 {% else %}
 

@@ -23,9 +23,9 @@
       </div>
 
       <div class="header-actions">
-        {% if all_groups and all_groups|length > 0 %}
+        {% if all_groups and all_groups|length > 0 and current_user %}
         <div class="group-selector-wrapper">
-          <label for="group-select" class="group-selector-label">Groupe :</label>
+          <label for="group-select" class="group-selector-label">Séjour :</label>
           <select id="group-select" class="group-select" title="Changer de groupe">
             {% for g in all_groups %}
             <option value="{{ g.id }}" {% if current_group and current_group.id == g.id %}selected{% endif %}>
@@ -36,13 +36,27 @@
         </div>
         {% endif %}
 
-        <button type="button" class="btn btn-secondary" id="open-new-account-modal" data-modal-target="modal-new-account">
-          👤 Créer un compte
-        </button>
+        {% if current_user %}
+        <span class="user-badge" style="background: rgba(37, 99, 235, 0.1); color: var(--primary-color, #2563eb); padding: 0.4rem 0.75rem; border-radius: 9999px; font-size: 0.85rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.35rem;">
+          👤 {{ current_user.name }}
+        </span>
 
         <button type="button" class="btn btn-primary" id="open-new-group-modal" data-modal-target="modal-new-group">
-          + Nouveau groupe
+          + Nouveau séjour
         </button>
+
+        <a href="{{ url_for('logout') }}" class="btn btn-secondary" style="text-decoration: none; padding: 0.4rem 0.75rem; font-size: 0.85rem;">
+          Déconnexion
+        </a>
+        {% else %}
+        <button type="button" class="btn btn-secondary" data-modal-target="modal-login">
+          🔑 Connexion
+        </button>
+
+        <button type="button" class="btn btn-primary" id="open-new-account-modal" data-modal-target="modal-new-account">
+          👤 Créer un compte
+        </button>
+        {% endif %}
       </div>
     </div>
   </header>
@@ -126,26 +140,73 @@
     </div>
   </div>
 
+  <!-- Modal Dialog: Login / Identification -->
+  <div id="modal-login" class="modal-backdrop" aria-hidden="true" role="dialog" aria-labelledby="modal-login-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modal-login-title">🔑 Connexion / Identification</h2>
+        <button type="button" class="modal-close-btn" data-modal-close aria-label="Fermer">&times;</button>
+      </div>
+      <form method="post" action="{{ url_for('login') }}">
+        <div class="modal-body">
+          {% if all_accounts and all_accounts|length > 0 %}
+          <div class="form-group">
+            <label for="login-select">Sélectionner un compte existant :</label>
+            <select id="login-select" class="form-control" onchange="document.getElementById('login-name').value = this.value;">
+              <option value="">-- Choisir un compte dans la liste --</option>
+              {% for acc in all_accounts %}
+              <option value="{{ acc.name }}">{{ acc.name }}</option>
+              {% endfor %}
+            </select>
+            <small class="form-help">Ou saisissez directement votre nom ci-dessous.</small>
+          </div>
+          {% endif %}
+
+          <div class="form-group">
+            <label for="login-name">Nom complet ou pseudo :</label>
+            <input type="text" id="login-name" name="name" class="form-control" placeholder="Ex : Alice" required>
+          </div>
+
+          <div class="form-group">
+            <label for="login-password">Mot de passe (optionnel) :</label>
+            <input type="password" id="login-password" name="password" class="form-control" placeholder="Laisser vide si aucun mot de passe">
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-modal-close>Annuler</button>
+          <button type="submit" class="btn btn-primary">Se connecter</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Modal Dialog: Create Account -->
   <div id="modal-new-account" class="modal-backdrop" aria-hidden="true" role="dialog" aria-labelledby="modal-account-title">
     <div class="modal-card">
       <div class="modal-header">
-        <h2 class="modal-title" id="modal-account-title">Créer un compte utilisateur</h2>
+        <h2 class="modal-title" id="modal-account-title">👤 Créer un compte utilisateur</h2>
         <button type="button" class="modal-close-btn" data-modal-close aria-label="Fermer">&times;</button>
       </div>
       <form method="post" action="{{ url_for('create_account') }}">
         <div class="modal-body">
           <div class="form-group">
             <label for="new-account-name">Nom complet ou pseudo :</label>
-            <input type="text" id="new-account-name" name="name" class="form-control" placeholder="Ex : Alice Martin" required>
-            <small class="form-help">Une personne créée ici pourra être sélectionnée ou ajoutée à tous les séjours.</small>
+            <input type="text" id="new-account-name" name="name" class="form-control" placeholder="Ex : Nicolas" required>
+            <small class="form-help">Vous serez automatiquement identifié sous ce compte après sa création.</small>
           </div>
+
+          <div class="form-group">
+            <label for="new-account-password">Mot de passe (optionnel) :</label>
+            <input type="password" id="new-account-password" name="password" class="form-control" placeholder="Sécurisez votre compte ou laissez vide">
+          </div>
+
           {% if current_group %}
           <input type="hidden" name="redirect_group_id" value="{{ current_group.id }}">
           <div class="form-group">
             <label class="checkbox-label">
               <input type="checkbox" name="add_to_current_group" value="1" checked>
-              <span>Ajouter directement ce membre au séjour actif ({{ current_group.name or current_group.nom }})</span>
+              <span>Ajouter directement ce compte comme membre du séjour actif ({{ current_group.name or current_group.nom }})</span>
             </label>
           </div>
           {% endif %}
@@ -153,7 +214,7 @@
 
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-modal-close>Annuler</button>
-          <button type="submit" class="btn btn-primary">Créer le compte</button>
+          <button type="submit" class="btn btn-primary">Créer le compte et me connecter</button>
         </div>
       </form>
     </div>

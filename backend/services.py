@@ -1,6 +1,8 @@
 """Règles du partage de frais et calcul des soldes. Aucun SQL ni code HTTP ici."""
-import re
 from datetime import date
+import re
+
+from werkzeug.security import check_password_hash, generate_password_hash
 
 import repository
 
@@ -248,17 +250,48 @@ def compute_settlements(balances, members_by_id):
     return settlements
 
 
-# --- Gestion des comptes / personnes ---
+# --- Gestion des comptes / personnes & Authentification ---
 
 
 def create_account(conn, data):
-    """Crée un compte utilisateur (personne)."""
+    """Crée un compte utilisateur (personne) avec mot de passe optionnel."""
     name = parse_text(data.get("name"), "name")
+    password = data.get("password")
+    if password is not None and isinstance(password, str):
+        password = password.strip()
+        password_hash = generate_password_hash(password) if password else None
+    else:
+        password_hash = None
+
     existing_id = repository.find_person_id_by_name(conn, name)
     if existing_id is not None:
         raise ValidationError(f'Un compte au nom de « {name} » existe déjà.')
-    person_id = repository.insert_person(conn, name)
+    person_id = repository.insert_person(conn, name, password_hash)
     return {"id": person_id, "name": name}
+
+
+def authenticate_user(conn, name, password=None):
+    """Vérifie l'identité d'un utilisateur pour la connexion."""
+    name = parse_text(name, "name")
+    person = repository.find_person_by_name(conn, name)
+    if not person:
+        raise ValidationError(f'Le compte « {name} » est introuvable.')
+
+    expected_hash = person.get("password_hash")
+    if expected_hash:
+        if not password or not check_password_hash(expected_hash, password):
+            raise ValidationError("Mot de passe incorrect.")
+    return {"id": person["id"], "name": person["name"]}
+
+
+def is_person_in_group(conn, person_id, group_id):
+    """Vérifie si une personne fait partie d'un groupe."""
+    return repository.is_person_in_group(conn, person_id, group_id)
+
+
+def list_groups_for_person(conn, person_id):
+    """Renvoie uniquement les groupes dont la personne est membre."""
+    return repository.list_groups_for_person(conn, person_id)
 
 
 def list_accounts(conn):

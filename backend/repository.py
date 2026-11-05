@@ -43,6 +43,14 @@ def find_person_id_by_name(conn, name):
     return row["id"] if row is not None else None
 
 
+def find_person_by_name(conn, name):
+    row = conn.execute(
+        "SELECT id, name, password_hash FROM Person WHERE lower(name) = lower(?) ORDER BY id LIMIT 1",
+        [name],
+    ).fetchone()
+    return dict(row) if row is not None else None
+
+
 def list_persons(conn):
     rows = conn.execute("SELECT id, name FROM Person ORDER BY name, id").fetchall()
     return [dict(row) for row in rows]
@@ -51,6 +59,28 @@ def list_persons(conn):
 def get_person(conn, person_id):
     row = conn.execute("SELECT id, name FROM Person WHERE id = ?", [person_id]).fetchone()
     return dict(row) if row is not None else None
+
+
+def is_person_in_group(conn, person_id, group_id):
+    row = conn.execute(
+        "SELECT 1 FROM Member WHERE person_id = ? AND group_id = ?",
+        [person_id, group_id],
+    ).fetchone()
+    return row is not None
+
+
+def list_groups_for_person(conn, person_id):
+    rows = conn.execute(
+        """
+        SELECT g.id, g.name, g.start_date, g.end_date
+        FROM "Group" g
+        JOIN Member m ON m.group_id = g.id
+        WHERE m.person_id = ?
+        ORDER BY g.start_date, g.id
+        """,
+        [person_id],
+    ).fetchall()
+    return [dict(row) for row in rows]
 
 
 def list_person_memberships(conn, person_id):
@@ -67,8 +97,11 @@ def list_person_memberships(conn, person_id):
     return [dict(row) for row in rows]
 
 
-def insert_person(conn, name):
-    return conn.execute("INSERT INTO Person (name) VALUES (?)", [name]).lastrowid
+def insert_person(conn, name, password_hash=None):
+    return conn.execute(
+        "INSERT INTO Person (name, password_hash) VALUES (?, ?)",
+        [name, password_hash],
+    ).lastrowid
 
 
 def insert_member(conn, person_id, group_id):

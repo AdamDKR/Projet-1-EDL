@@ -38,7 +38,8 @@
             <th>Nom de la personne</th>
             <th>Nombre de séjours</th>
             <th>Séjours associés</th>
-            <th style="text-align: right;">Bilan global</th>
+            <th>Bilan global</th>
+            <th style="text-align: right;">Action</th>
           </tr>
         </thead>
         <tbody>
@@ -72,10 +73,22 @@
               <span style="color: var(--text-muted); font-size: 0.85rem;">Aucun séjour pour l'instant</span>
               {% endif %}
             </td>
-            <td style="text-align: right;">
+            <td>
               <span class="balance-status-badge {{ 'status-positive' if acc.total_balance_cents > 0 else ('status-negative' if acc.total_balance_cents < 0 else 'status-neutral') }}" style="font-weight: 600; font-size: 0.95rem;">
                 {{ acc.total_balance_str }}
               </span>
+            </td>
+            <td style="text-align: right;">
+              {% if current_user and current_user.name == acc.name %}
+              <span class="badge badge-zero-sum" style="font-size: 0.8rem;">Connecté</span>
+              {% else %}
+              <form method="post" action="{{ url_for('login') }}" style="display: inline;">
+                <input type="hidden" name="name" value="{{ acc.name }}">
+                <button type="submit" class="btn btn-secondary" style="padding: 0.25rem 0.6rem; font-size: 0.8rem;">
+                  🔑 Se connecter
+                </button>
+              </form>
+              {% endif %}
             </td>
           </tr>
           {% endfor %}

@@ -382,3 +382,93 @@ def test_web_routes_and_account_creation_flow(client):
     assert add_m.status_code == 200
     assert "Nicolas" in add_m.text
 
+
+def test_account_authentication_and_login(client):
+    # Créer un compte avec mot de passe
+    res = client.post(
+        "/accounts",
+        data={"name": "Sophie", "password": "mypassword"},
+        follow_redirects=True,
+    )
+    assert res.status_code == 200
+    assert "Sophie" in res.text
+
+    # Se déconnecter
+    logout = client.get("/logout", follow_redirects=True)
+    assert logout.status_code == 200
+
+    # Mauvais mot de passe
+    bad_login = client.post(
+        "/login",
+        data={"name": "Sophie", "password": "wrong"},
+        follow_redirects=True,
+    )
+    assert "Mot de passe incorrect" in bad_login.text
+
+    # Bon mot de passe
+    good_login = client.post(
+        "/login",
+        data={"name": "Sophie", "password": "mypassword"},
+        follow_redirects=True,
+    )
+    assert good_login.status_code == 200
+    assert "Bonjour Sophie" in good_login.text
+
+
+def test_group_access_control_isolated_to_members(client):
+    # Sophie crée son compte et son groupe
+    client.post("/accounts", data={"name": "Sophie", "password": "123"})
+    g_sophie = client.post(
+        "/groups",
+        data={
+            "name": "Lisbonne",
+            "start_date": "2026-07-01",
+            "end_date": "2026-07-08",
+            "members": "Marc",
+        },
+        follow_redirects=True,
+    )
+    assert "Lisbonne" in g_sophie.text
+
+    # Sophie se déconnecte
+    client.get("/logout")
+
+    # Paul crée son compte et son groupe
+    client.post("/accounts", data={"name": "Paul", "password": "456"})
+    g_paul = client.post(
+        "/groups",
+        data={
+            "name": "Bruges",
+            "start_date": "2026-08-01",
+            "end_date": "2026-08-05",
+            "members": "",
+        },
+        follow_redirects=True,
+    )
+    assert "Bruges" in g_paul.text
+
+    # Paul connecté ne voit QUE son groupe dans sa liste
+    home_paul = client.get("/")
+    assert "Bruges" in home_paul.text
+    # Lisbonne ne doit pas apparaître dans les séjours de Paul
+    assert "Lisbonne" not in home_paul.text
+
+    # Paul essaie d'accéder au groupe de Sophie (id 1) -> Accès refusé
+    forbidden_view = client.get("/?group_id=1", follow_redirects=True)
+    assert "Accès refusé" in forbidden_view.text
+
+    # Paul essaie d'ajouter une dépense au groupe de Sophie -> Refusé
+    forbidden_expense = client.post(
+        "/groups/1/expenses",
+        data={
+            "label": "Tapas",
+            "amount": "20",
+            "date": "2026-07-02",
+            "payer_id": 1,
+            "participants": [1],
+        },
+        follow_redirects=True,
+    )
+    assert "Accès refusé" in forbidden_expense.text
+
+
