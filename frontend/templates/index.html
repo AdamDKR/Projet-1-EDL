@@ -93,12 +93,22 @@
   {% if settlements and settlements|length > 0 %}
   <div class="settlements-list">
     {% for s in settlements %}
-    <div class="settlement-item">
-      <span class="settlement-user">{{ s.debtor }}</span>
-      <span class="settlement-arrow">doit rembourser</span>
-      <span class="settlement-amount">{{ s.amount_str }}</span>
-      <span class="settlement-arrow">à</span>
-      <span class="settlement-user">{{ s.creditor }}</span>
+    <div class="settlement-item" style="justify-content: space-between;">
+      <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+        <span class="settlement-user">{{ s.debtor }}</span>
+        <span class="settlement-arrow">doit rembourser</span>
+        <span class="settlement-amount">{{ s.amount_str }}</span>
+        <span class="settlement-arrow">à</span>
+        <span class="settlement-user">{{ s.creditor }}</span>
+      </div>
+      <form method="post" action="{{ url_for('add_reimbursement', group_id=current_group.id) }}" style="display: inline;">
+        <input type="hidden" name="from_member_id" value="{{ s.debtor_id }}">
+        <input type="hidden" name="to_member_id" value="{{ s.creditor_id }}">
+        <input type="hidden" name="amount" value="{{ s.amount }}">
+        <button type="submit" class="btn btn-sm btn-primary" title="Marquer ce règlement comme remboursé">
+          💸 Rembourser
+        </button>
+      </form>
     </div>
     {% endfor %}
   </div>
@@ -145,6 +155,9 @@
             </td>
             <td>
               <strong style="color: var(--text-main);">{{ exp.label or exp.libelle }}</strong>
+              {% if exp.is_reimbursement %}
+              <span class="badge status-positive" style="margin-left: 0.35rem; font-size: 0.72rem;">💸 Remboursement</span>
+              {% endif %}
             </td>
             <td>
               <span class="badge badge-payer">{{ exp.payer_name }}</span>
@@ -252,6 +265,66 @@
         {% else %}
         <p style="color: var(--text-muted); font-size: 0.9rem;">
           Veuillez d'abord ajouter des membres à ce groupe avant d'enregistrer une dépense.
+        </p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Card: Reimburse a Member -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="section-title" style="font-size: 1.05rem;">
+          <span>💸 Rembourser un membre</span>
+        </h3>
+      </div>
+      <div class="card-body">
+        {% if members and members|length >= 2 %}
+        <form id="reimbursement-form" method="post" action="{{ url_for('add_reimbursement', group_id=current_group.id) }}">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="reimburse-from">Qui rembourse :</label>
+              <select id="reimburse-from" name="from_member_id" class="form-control" required>
+                {% for m in members %}
+                <option value="{{ m.id }}" {% if loop.index == 2 %}selected{% endif %}>{{ m.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="reimburse-to">À qui (bénéficiaire) :</label>
+              <select id="reimburse-to" name="to_member_id" class="form-control" required>
+                {% for m in members %}
+                <option value="{{ m.id }}" {% if loop.index == 1 %}selected{% endif %}>{{ m.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="reimburse-amount">Montant remboursé (€) :</label>
+            <input type="text" id="reimburse-amount" name="amount" class="form-control" placeholder="Ex : 10.00 ou 15,50" inputmode="decimal" required pattern="^[0-9]+([.,][0-9]{1,2})?$">
+          </div>
+
+          <div class="form-group">
+            <label for="reimburse-date">Date du remboursement :</label>
+            <input type="date" id="reimburse-date" name="date" class="form-control"
+                   min="{{ current_group.start_date or current_group.date_debut }}"
+                   max="{{ current_group.end_date or current_group.date_fin }}"
+                   value="{{ current_group.start_date or current_group.date_debut }}"
+                   required>
+          </div>
+
+          <div class="form-group">
+            <label for="reimburse-label">Libellé (optionnel) :</label>
+            <input type="text" id="reimburse-label" name="label" class="form-control" placeholder="Par défaut : Remboursement (Payeur → Bénéficiaire)">
+          </div>
+
+          <button type="submit" class="btn btn-secondary btn-block" style="margin-top: 0.75rem;">
+            💸 Enregistrer le remboursement
+          </button>
+        </form>
+        {% else %}
+        <p style="color: var(--text-muted); font-size: 0.9rem;">
+          Il faut au moins 2 membres dans le groupe pour enregistrer un remboursement.
         </p>
         {% endif %}
       </div>

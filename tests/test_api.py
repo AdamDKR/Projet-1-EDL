@@ -472,3 +472,119 @@ def test_group_access_control_isolated_to_members(client):
     assert "Accès refusé" in forbidden_expense.text
 
 
+# --- Remboursements entre membres ---
+
+
+def test_reimbursement_between_members_updates_balances(client, group):
+    alice, bob, chloe = ids(group)
+    assert add(client, group).status_code == 201
+    assert balances(client, group) == ["+20.00", "-10.00", "-10.00"]
+
+    settlements = client.get(f"/api/groups/{group['id']}/settlements").get_json()
+    assert len(settlements) == 2
+
+    # Bob rembourse 10 € à Alice
+    res_bob = client.post(
+        f"/api/groups/{group['id']}/reimbursements",
+        json={
+            "from_member_id": bob,
+            "to_member_id": alice,
+            "amount": "10.00",
+        },
+    )
+    assert res_bob.status_code == 201
+    data_bob = res_bob.get_json()
+    assert data_bob["is_reimbursement"] is True
+    assert data_bob["from_member_id"] == bob
+    assert data_bob["to_member_id"] == alice
+    assert balances(client, group) == ["+10.00", "0.00", "-10.00"]
+
+    # Chloé rembourse 10 € à Alice
+    res_chloe = client.post(
+        f"/api/groups/{group['id']}/reimbursements",
+        json={
+            "from_member_id": chloe,
+            "to_member_id": alice,
+            "amount": "10,00",
+            "date": "2026-07-05",
+        },
+    )
+    assert res_chloe.status_code == 201
+    assert balances(client, group) == ["0.00", "0.00", "0.00"]
+    assert client.get(f"/api/groups/{group['id']}/settlements").get_json() == []
+
+
+def test_reimbursement_validation_rules(client, group):
+    alice, bob, _ = ids(group)
+    url = f"/api/groups/{group['id']}/reimbursements"
+
+    # Se rembourser soi-même est refusé
+    assert (
+        client.post(
+            url, json={"from_member_id": alice, "to_member_id": alice, "amount": "10"}
+        ).status_code
+        == 400
+    )
+
+    # Membre inconnu refusé
+    assert (
+        client.post(
+            url, json={"from_member_id": 999, "to_member_id": alice, "amount": "10"}
+        ).status_code
+        == 400
+    )
+    assert (
+        client.post(
+            url, json={"from_member_id": bob, "to_member_id": 999, "amount": "10"}
+        ).status_code
+        == 400
+    )
+
+    # Montant nul ou négatif refusé
+    assert (
+        client.post(
+            url, json={"from_member_id": bob, "to_member_id": alice, "amount": "0"}
+        ).status_code
+        == 400
+    )
+    assert (
+        client.post(
+            url, json={"from_member_id": bob, "to_member_id": alice, "amount": "-5"}
+        ).status_code
+        == 400
+    )
+
+    # Date hors séjour refusée
+    assert (
+        client.post(
+            url,
+            json={
+                "from_member_id": bob,
+                "to_member_id": alice,
+                "amount": "10",
+                "date": "2026-07-15",
+            },
+        ).status_code
+        == 400
+    )
+
+
+def test_web_reimbursement_flow(client):
+    client.post("/seed-sample-data", follow_redirects=True)
+    # Dans l'exemple, Alice=1, Bob=2, Chloé=3. Bob rembourse 10 € à Alice
+    res = client.post(
+        "/groups/1/reimbursements",
+        data={
+            "from_member_id": 2,
+            "to_member_id": 1,
+            "amount": "10.00",
+        },
+        follow_redirects=True,
+    )
+    assert res.status_code == 200
+    assert "Remboursement de 10,00 € de Bob à Alice enregistré avec succès" in res.text
+    # Le total dépensé du séjour reste 30,00 € (non gonflé par le remboursement)
+    assert "Total : 30,00 €" in res.text
+
+
+

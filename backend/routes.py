@@ -84,6 +84,19 @@ def get_balances(group_id):
         return jsonify(services.get_balances(conn, group_id))
 
 
+@api.get("/groups/<int:group_id>/settlements")
+def get_settlements(group_id):
+    with transaction() as conn:
+        return jsonify(services.get_settlements(conn, group_id))
+
+
+@api.post("/groups/<int:group_id>/reimbursements")
+def add_reimbursement(group_id):
+    data = json_body()
+    with transaction() as conn:
+        return jsonify(services.add_reimbursement(conn, group_id, data)), 201
+
+
 @api.get("/accounts")
 def list_accounts():
     with transaction() as conn:

@@ -184,6 +184,82 @@ def add_expense(conn, group_id, data):
     return next(e for e in list_expenses(conn, group_id) if e["id"] == expense_id)
 
 
+def is_reimbursement_expense(expense):
+    """Indique si une opération correspond à un remboursement entre deux membres."""
+    label = expense.get("label") or ""
+    participants = expense.get("participants") or []
+    return label.startswith("Remboursement") and len(participants) == 1
+
+
+def add_reimbursement(conn, group_id, data):
+    """Enregistre un remboursement d'un membre (from_member_id) vers un autre (to_member_id).
+
+    Mathématiquement, un remboursement de A vers B de M centimes équivaut à une opération
+    où A paie M centimes pour l'unique bénéficiaire B : le solde de A augmente de +M
+    et le solde de B diminue de -M, tout en conservant la somme des soldes égale à 0.
+    """
+    group = get_group(conn, group_id)
+    members_by_id = {member["id"]: member for member in group["members"]}
+
+    from_member_id = data.get("from_member_id")
+    if from_member_id is None:
+        from_member_id = data.get("payer_id", data.get("debtor_id"))
+
+    to_member_id = data.get("to_member_id")
+    if to_member_id is None:
+        to_member_id = data.get("recipient_id", data.get("creditor_id"))
+
+    if not _is_id(from_member_id) or from_member_id not in members_by_id:
+        raise ValidationError("The reimbursing member must belong to the group.")
+    if not _is_id(to_member_id) or to_member_id not in members_by_id:
+        raise ValidationError("The recipient member must belong to the group.")
+    if from_member_id == to_member_id:
+        raise ValidationError("A member cannot reimburse themselves.")
+
+    amount_cents = parse_amount(data.get("amount"))
+
+    raw_date = data.get("date")
+    if raw_date is not None and str(raw_date).strip() != "":
+        expense_date = parse_date(raw_date, "date")
+        if not group["start_date"] <= expense_date <= group["end_date"]:
+            raise ValidationError("The reimbursement date must be within the stay.")
+    else:
+        today_str = date.today().isoformat()
+        if today_str < group["start_date"]:
+            expense_date = group["start_date"]
+        elif today_str > group["end_date"]:
+            expense_date = group["end_date"]
+        else:
+            expense_date = today_str
+
+    from_name = members_by_id[from_member_id]["name"]
+    to_name = members_by_id[to_member_id]["name"]
+    raw_label = data.get("label")
+    if raw_label is not None and isinstance(raw_label, str) and raw_label.strip():
+        label = raw_label.strip()
+    else:
+        label = f"Remboursement ({from_name} → {to_name})"
+
+    expense_id = repository.insert_expense(
+        conn,
+        group_id,
+        label,
+        amount_cents,
+        expense_date,
+        members_by_id[from_member_id]["person_id"],
+    )
+    repository.insert_participant(conn, expense_id, to_member_id)
+    created = next(e for e in list_expenses(conn, group_id) if e["id"] == expense_id)
+    return {
+        **created,
+        "from_member_id": from_member_id,
+        "from_member": from_name,
+        "to_member_id": to_member_id,
+        "to_member": to_name,
+        "is_reimbursement": True,
+    }
+
+
 def delete_expense(conn, group_id, expense_id):
     get_group(conn, group_id)
     if not repository.delete_expense(conn, group_id, expense_id):
@@ -236,8 +312,11 @@ def compute_settlements(balances, members_by_id):
         payment = min(debt, credit)
         if payment > 0:
             settlements.append({
+                "debtor_id": debtor_id,
                 "debtor": members_by_id.get(debtor_id, f"Membre #{debtor_id}"),
+                "creditor_id": creditor_id,
                 "creditor": members_by_id.get(creditor_id, f"Membre #{creditor_id}"),
+                "amount": format_cents(payment),
                 "amount_cents": payment,
                 "amount_str": format_cents_fr(payment),
             })
@@ -248,6 +327,15 @@ def compute_settlements(balances, members_by_id):
         if creditors[c_idx][1] == 0:
             c_idx += 1
     return settlements
+
+
+def get_settlements(conn, group_id):
+    """Renvoie la liste des règlements suggérés pour un groupe donné."""
+    group = get_group(conn, group_id)
+    members_by_id = {m["id"]: m["name"] for m in group["members"]}
+    raw_balances = get_balances(conn, group_id)
+    balances_dict = {b["member_id"]: b["balance_cents"] for b in raw_balances}
+    return compute_settlements(balances_dict, members_by_id)
 
 
 # --- Gestion des comptes / personnes & Authentification ---

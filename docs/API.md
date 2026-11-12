@@ -30,6 +30,8 @@ All routes start with `/api`. Requests and responses use JSON, so send the `Cont
 | POST | `/api/groups/<id>/expenses` | Add an expense | 201 |
 | DELETE | `/api/groups/<id>/expenses/<expense_id>` | Delete an expense | 204, no content |
 | GET | `/api/groups/<id>/balances` | Get member balances | 200 |
+| GET | `/api/groups/<id>/settlements` | Get suggested settlements | 200 |
+| POST | `/api/groups/<id>/reimbursements` | Record a reimbursement between members | 201 |
 | GET | `/api/accounts` | List user accounts and global balances | 200 |
 | POST | `/api/accounts` | Create a user account | 201 |
 
@@ -138,6 +140,22 @@ The response has the same format as one item of the list below.
 ```
 
 Display `balance`, which is already formatted. Reload the balances after adding or deleting an expense: the backend computes them on each call.
+
+## Reimbursements between members
+
+`POST /api/groups/<id>/reimbursements`
+
+```json
+{
+  "from_member_id": 5,
+  "to_member_id": 4,
+  "amount": "10.00",
+  "date": "2026-07-02"
+}
+```
+
+- `from_member_id` (the member paying back) and `to_member_id` (the recipient) must be distinct member IDs belonging to the group.
+- `date` and `label` are optional (defaulting to a valid date within the stay and `"Remboursement (Payeur → Bénéficiaire)"`).
 
 ## `fetch` example
 

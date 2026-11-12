@@ -8,6 +8,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initGroupValidation();
   initParticipantToggles();
   initExpenseValidation();
+  initReimbursementValidation();
   initAlertDismissals();
   initGroupSelector();
 });
@@ -202,6 +203,37 @@ function initExpenseValidation() {
       }
     }
 
+    return true;
+  });
+}
+
+/**
+ * Client-side validation for reimbursement form (distinct members & positive amount).
+ */
+function initReimbursementValidation() {
+  const form = document.getElementById("reimbursement-form");
+  if (!form) return;
+
+  form.addEventListener("submit", (e) => {
+    const fromSelect = form.querySelector('select[name="from_member_id"]');
+    const toSelect = form.querySelector('select[name="to_member_id"]');
+    if (fromSelect && toSelect && fromSelect.value === toSelect.value) {
+      e.preventDefault();
+      alert("Un membre ne peut pas se rembourser lui-même. Veuillez choisir deux membres différents.");
+      toSelect.focus();
+      return false;
+    }
+
+    const amountInput = form.querySelector('input[name="amount"]');
+    if (amountInput) {
+      const val = parseFloat(amountInput.value.replace(",", "."));
+      if (isNaN(val) || val <= 0) {
+        e.preventDefault();
+        alert("Le montant du remboursement doit être un nombre strictement positif.");
+        amountInput.focus();
+        return false;
+      }
+    }
     return true;
   });
 }

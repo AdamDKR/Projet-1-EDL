@@ -133,7 +133,11 @@ def home():
         )
 
         group_expenses = services.list_expenses(conn, gid)
-        total_spent_cents = sum(exp["amount_cents"] for exp in group_expenses)
+        total_spent_cents = sum(
+            exp["amount_cents"]
+            for exp in group_expenses
+            if not services.is_reimbursement_expense(exp)
+        )
 
         raw_balances = services.get_balances(conn, gid)
         balances_dict = {b["member_id"]: b["balance_cents"] for b in raw_balances}
@@ -184,6 +188,7 @@ def home():
                     "payer_name": exp["payer"],
                     "participants": [p["id"] for p in exp["participants"]],
                     "participants_details": exp["participants"],
+                    "is_reimbursement": services.is_reimbursement_expense(exp),
                 }
             )
 
@@ -376,6 +381,45 @@ def add_expense(group_id):
                 },
             )
         flash(f"La dépense « {label} » a été enregistrée avec succès.", "success")
+    except (services.ValidationError, services.NotFoundError) as e:
+        flash(str(e), "danger")
+    return redirect(url_for("home", group_id=group_id))
+
+
+@app.post("/groups/<int:group_id>/reimbursements")
+def add_reimbursement(group_id):
+    """Enregistrement d'un remboursement entre deux membres du groupe."""
+    current_user = get_current_user()
+    from_member_id = request.form.get("from_member_id", type=int)
+    to_member_id = request.form.get("to_member_id", type=int)
+    amount = request.form.get("amount", "").strip()
+    date_val = request.form.get("date", "").strip()
+    label = request.form.get("label", "").strip()
+
+    try:
+        with transaction() as conn:
+            if current_user and not services.is_person_in_group(
+                conn, current_user["id"], group_id
+            ):
+                flash("Accès refusé : vous ne faites pas partie de ce groupe.", "danger")
+                return redirect(url_for("home"))
+
+            reimbursement = services.add_reimbursement(
+                conn,
+                group_id,
+                {
+                    "from_member_id": from_member_id,
+                    "to_member_id": to_member_id,
+                    "amount": amount,
+                    "date": date_val if date_val else None,
+                    "label": label if label else None,
+                },
+            )
+        amount_str = services.format_cents_fr(reimbursement["amount_cents"])
+        flash(
+            f"Remboursement de {amount_str} de {reimbursement['from_member']} à {reimbursement['to_member']} enregistré avec succès !",
+            "success",
+        )
     except (services.ValidationError, services.NotFoundError) as e:
         flash(str(e), "danger")
     return redirect(url_for("home", group_id=group_id))
