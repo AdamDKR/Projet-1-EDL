@@ -1,4 +1,5 @@
 """Ouverture de la base SQLite."""
+import re
 import sqlite3
 import threading
 from contextlib import closing, contextmanager
@@ -11,6 +12,8 @@ SCHEMA_PATH = ROOT / "db" / "schema.sql"
 
 # Le frontend peut envoyer plusieurs requêtes à la fois : une seule doit créer la base.
 _creation_lock = threading.Lock()
+# Bases déjà vérifiées depuis le lancement, pour ne faire la mise à jour qu'une fois.
+_checked_databases = set()
 
 
 def _create_database():
@@ -23,10 +26,30 @@ def _create_database():
     temporary_path.replace(DATABASE_PATH)
 
 
+def _add_refund_table_if_missing():
+    # Un data.db créé avant l'ajout des remboursements n'a pas la table Refund :
+    # on l'ajoute, avec la nouvelle vue v_balance, sans toucher aux données existantes.
+    with closing(sqlite3.connect(DATABASE_PATH)) as conn:
+        found = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'Refund'"
+        ).fetchone()
+        if found:
+            return
+        schema = SCHEMA_PATH.read_text(encoding="utf-8")
+        refund_table = re.search(r"CREATE TABLE Refund \(.*?\);", schema, re.S).group(0)
+        balance_view = re.search(r"CREATE VIEW v_balance AS.*?;", schema, re.S).group(0)
+        conn.executescript(
+            f"BEGIN; {refund_table} DROP VIEW IF EXISTS v_balance; {balance_view} COMMIT;"
+        )
+
+
 def open_database():
     with _creation_lock:
         if not DATABASE_PATH.exists():
             _create_database()
+        elif DATABASE_PATH not in _checked_databases:
+            _add_refund_table_if_missing()
+        _checked_databases.add(DATABASE_PATH)
     conn = sqlite3.connect(DATABASE_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")

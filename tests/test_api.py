@@ -472,3 +472,116 @@ def test_group_access_control_isolated_to_members(client):
     assert "Accès refusé" in forbidden_expense.text
 
 
+
+
+# --- Remboursements ---
+
+
+def refund(client, group, **changes):
+    alice, bob = ids(group)[:2]
+    body = {"payer_id": bob, "reimbursed_id": alice, "amount": "10", "date": "2026-07-15", **changes}
+    return client.post(f"/api/groups/{group['id']}/refund", json=body)
+
+
+def test_refund_settles_a_debt(client, group):
+    add(client, group)
+    response = refund(client, group)
+    assert response.status_code == 201
+    assert response.get_json()["payer"] == "Bob"
+    assert response.get_json()["reimbursed"] == "Alice"
+    assert balances(client, group) == ["+10.00", "0.00", "-10.00"]
+
+
+def test_refund_is_not_listed_as_an_expense(client, group):
+    add(client, group)
+    refund(client, group)
+    assert len(client.get(f"/api/groups/{group['id']}/expenses").get_json()) == 1
+
+
+@pytest.mark.parametrize("refund_date", ["2026-07-01", "2026-07-08", "2026-12-31"])
+def test_refund_can_be_dated_after_the_stay(client, group, refund_date):
+    assert refund(client, group, date=refund_date).status_code == 201
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"date": "2026-06-30"},
+        {"date": "not a date"},
+        {"amount": 0},
+        {"amount": "-5"},
+        {"payer_id": 9999},
+        {"reimbursed_id": 9999},
+        {"reimbursed_id": [1]},
+        {"reimbursed_id": "1"},
+        {"payer_id": None},
+    ],
+)
+def test_invalid_refund_is_rejected(client, group, changes):
+    assert refund(client, group, **changes).status_code == 400
+    assert balances(client, group) == ["0.00", "0.00", "0.00"]
+
+
+def test_member_cannot_refund_themselves(client, group):
+    alice = ids(group)[0]
+    assert refund(client, group, payer_id=alice, reimbursed_id=alice).status_code == 400
+
+
+def test_refund_with_a_member_of_another_group_is_rejected(client, group):
+    zoe = ids(new_group(client, members=["Zoé"], name="Other"))[0]
+    assert refund(client, group, reimbursed_id=zoe).status_code == 400
+    assert refund(client, group, payer_id=zoe).status_code == 400
+
+
+def test_suggested_settlements_bring_balances_to_zero(client, group):
+    alice, bob, chloe = ids(group)
+    add(client, group, amount="10.01", participants=[chloe, bob, alice])
+    with database.transaction() as conn:
+        balances_by_id = {b["member_id"]: b["balance_cents"] for b in services.get_balances(conn, group["id"])}
+        settlements = services.compute_settlements(balances_by_id, {m["id"]: m["name"] for m in group["members"]})
+    names = {m["name"]: m["id"] for m in group["members"]}
+    for s in settlements:
+        assert refund(
+            client, group,
+            payer_id=names[s["debtor"]], reimbursed_id=names[s["creditor"]],
+            amount=f"{s['amount_cents'] / 100:.2f}",
+        ).status_code == 201
+    assert balances(client, group) == ["0.00", "0.00", "0.00"]
+
+
+def test_sql_views_include_refunds(client, group):
+    add(client, group, amount="10.01")
+    refund(client, group, amount="3.34")
+    backend = [b["balance_cents"] for b in client.get(f"/api/groups/{group['id']}/balances").get_json()]
+    with database.transaction() as conn:
+        rows = conn.execute(
+            "SELECT balance_cents FROM v_balance WHERE group_id = ? ORDER BY member_id", [group["id"]]
+        ).fetchall()
+    assert [row["balance_cents"] for row in rows] == backend
+    assert sum(backend) == 0
+
+
+def test_refund_form_on_the_web_page(client, group):
+    alice, bob = ids(group)[:2]
+    add(client, group)
+    form = {"payer_id": str(bob), "reimbursed_id": str(alice), "amount": "10,00", "date": "2026-07-20"}
+    response = client.post(f"/groups/{group['id']}/refunds", data=form)
+    assert response.status_code == 302
+    assert balances(client, group) == ["+10.00", "0.00", "-10.00"]
+
+    page = client.get(f"/?group_id={group['id']}")
+    assert page.status_code == 200
+    assert "Ajouter un remboursement".encode() in page.data
+
+
+def test_database_created_before_refunds_is_upgraded(client, group):
+    # Simule un data.db créé avant l'ajout des remboursements, avec des données dedans.
+    add(client, group)
+    with database.transaction() as conn:
+        conn.execute("DROP TABLE Refund")
+    database._checked_databases.clear()
+
+    assert client.get("/").status_code == 200
+    assert balances(client, group) == ["+20.00", "-10.00", "-10.00"]
+    assert refund(client, group).status_code == 201
+    assert balances(client, group) == ["+10.00", "0.00", "-10.00"]

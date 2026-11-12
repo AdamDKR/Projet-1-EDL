@@ -257,6 +257,56 @@
       </div>
     </div>
 
+    <!-- Card: Add Refund -->
+    {% if members and members|length > 1 %}
+    <div class="card">
+      <div class="card-header">
+        <h3 class="section-title" style="font-size: 1.05rem;">
+          <span>💸 Ajouter un remboursement</span>
+        </h3>
+      </div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('add_refund', group_id=current_group.id) }}">
+          <div class="form-group">
+            <label for="refund-payer">Qui rembourse :</label>
+            <select id="refund-payer" name="payer_id" class="form-control" required>
+              {% for m in members %}
+              <option value="{{ m.id }}">{{ m.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="refund-reimbursed">À qui :</label>
+            <select id="refund-reimbursed" name="reimbursed_id" class="form-control" required>
+              {% for m in members %}
+              <option value="{{ m.id }}" {{ 'selected' if loop.index == 2 else '' }}>{{ m.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="refund-amount">Montant (€) :</label>
+            <input type="text" id="refund-amount" name="amount" class="form-control" placeholder="Ex : 10.00 ou 12,50" inputmode="decimal" required pattern="^[0-9]+([.,][0-9]{1,2})?$">
+          </div>
+
+          <div class="form-group">
+            <label for="refund-date">Date du remboursement :</label>
+            <input type="date" id="refund-date" name="date" class="form-control"
+                   min="{{ current_group.start_date }}"
+                   value="{{ current_group.end_date }}"
+                   required>
+            <small class="form-help">À partir du {{ current_group.start_date_formatted or current_group.start_date }}, y compris après le séjour.</small>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-block">
+            Enregistrer le remboursement
+          </button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+
     <!-- Card: Add Member -->
     <div class="card">
       <div class="card-header">

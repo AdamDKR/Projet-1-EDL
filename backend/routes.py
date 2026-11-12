@@ -102,3 +102,10 @@ def login():
     data = json_body()
     with transaction() as conn:
         return jsonify(services.authenticate_user(conn, data.get("name"), data.get("password"))), 200
+
+
+@api.post("/groups/<int:group_id>/refund")
+def add_refund(group_id):
+    data = json_body()
+    with transaction() as conn:
+        return jsonify(services.add_refund(conn, group_id, data)), 201

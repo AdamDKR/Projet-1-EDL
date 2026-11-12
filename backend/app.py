@@ -381,6 +381,34 @@ def add_expense(group_id):
     return redirect(url_for("home", group_id=group_id))
 
 
+@app.post("/groups/<int:group_id>/refunds")
+def add_refund(group_id):
+    """Enregistre un remboursement entre deux membres (vérifie l'appartenance de l'utilisateur connecté)."""
+    current_user = get_current_user()
+    try:
+        with transaction() as conn:
+            if current_user and not services.is_person_in_group(
+                conn, current_user["id"], group_id
+            ):
+                flash("Accès refusé : vous ne faites pas partie de ce groupe.", "danger")
+                return redirect(url_for("home"))
+
+            services.add_refund(
+                conn,
+                group_id,
+                {
+                    "amount": request.form.get("amount", "").strip(),
+                    "date": request.form.get("date", "").strip(),
+                    "payer_id": request.form.get("payer_id", type=int),
+                    "reimbursed_id": request.form.get("reimbursed_id", type=int),
+                },
+            )
+        flash("Le remboursement a été enregistré avec succès.", "success")
+    except (services.ValidationError, services.NotFoundError) as e:
+        flash(str(e), "danger")
+    return redirect(url_for("home", group_id=group_id))
+
+
 @app.post("/groups/<int:group_id>/expenses/<int:expense_id>/delete")
 def delete_expense(group_id, expense_id):
     """Suppression d'une dépense (vérifie l'appartenance de l'utilisateur connecté)."""

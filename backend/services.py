@@ -100,6 +100,7 @@ def get_group(conn, group_id):
 
 def _insert_member(conn, group_id, name, existing_names):
     name = parse_text(name, "name")
+    # A1
     if name.casefold() in existing_names:
         raise ValidationError(f'The member "{name}" already exists in this group.')
     existing_names.add(name.casefold())
@@ -158,6 +159,7 @@ def add_expense(conn, group_id, data):
     group = get_group(conn, group_id)
     person_ids = {member["id"]: member["person_id"] for member in group["members"]}
 
+    #A2
     label = parse_text(data.get("label"), "label")
     amount_cents = parse_amount(data.get("amount"))
     expense_date = parse_date(data.get("date"), "date")
@@ -339,6 +341,15 @@ def get_balances(conn, group_id):
         }
         for expense in list_expenses(conn, group_id)
     ]
+    # Un remboursement compte comme si celui qui rembourse payait le montant pour celui qui reçoit.
+    expenses += [
+        {
+            "amount_cents": refund["amount_cents"],
+            "payer_id": refund["payer_id"],
+            "participants": [refund["reimbursed_id"]],
+        }
+        for refund in repository.list_refunds(conn, group_id)
+    ]
     balances = compute_balances([member["id"] for member in members], expenses)
     return [
         {
@@ -349,3 +360,34 @@ def get_balances(conn, group_id):
         }
         for member in members
     ]
+
+
+# --- Remboursement ---
+
+
+def add_refund(conn, group_id, data):
+    """Enregistre un remboursement : payer_id rembourse reimbursed_id."""
+    group = get_group(conn, group_id)
+    member_ids = {member["id"] for member in group["members"]}
+
+    amount_cents = parse_amount(data.get("amount"))
+    refund_date = parse_date(data.get("date"), "date")
+    # Pas de date de fin : on peut rembourser après le séjour, mais pas avant qu'il commence.
+    if refund_date < group["start_date"]:
+        raise ValidationError("A refund cannot be dated before the start of the stay.")
+
+    payer_id = data.get("payer_id")
+    if not _is_id(payer_id) or payer_id not in member_ids:
+        raise ValidationError("The member who refunds must belong to the group.")
+
+    reimbursed_id = data.get("reimbursed_id")
+    if not _is_id(reimbursed_id) or reimbursed_id not in member_ids:
+        raise ValidationError("The member who is refunded must belong to the group.")
+    if payer_id == reimbursed_id:
+        raise ValidationError("A member cannot refund themselves.")
+
+    refund_id = repository.insert_refund(
+        conn, group_id, payer_id, reimbursed_id, amount_cents, refund_date
+    )
+    refund = next(r for r in repository.list_refunds(conn, group_id) if r["id"] == refund_id)
+    return {**refund, "amount": format_cents(refund["amount_cents"])}

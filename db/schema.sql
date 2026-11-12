@@ -46,6 +46,18 @@ CREATE TABLE ExpenseParticipant (
     UNIQUE (member_id, expense_id)
 );
 
+-- Remboursement d'un membre à un autre. Il n'est pas limité aux dates du séjour :
+-- on rembourse souvent après les vacances.
+CREATE TABLE Refund (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    group_id       INTEGER NOT NULL REFERENCES "Group"(id) ON DELETE CASCADE,
+    from_member_id INTEGER NOT NULL REFERENCES Member(id),   -- celui qui rembourse
+    to_member_id   INTEGER NOT NULL REFERENCES Member(id),   -- celui qui reçoit
+    amount_cents   INTEGER NOT NULL CHECK (typeof(amount_cents) = 'integer' AND amount_cents > 0),
+    date           TEXT    NOT NULL CHECK (date(date) = date),
+    CHECK (from_member_id <> to_member_id)
+);
+
 CREATE INDEX idx_member_group      ON Member(group_id);
 CREATE INDEX idx_expense_group     ON Expense(group_id);
 CREATE INDEX idx_participant_exp   ON ExpenseParticipant(expense_id);
@@ -122,6 +134,7 @@ JOIN Expense e ON e.id = ep.expense_id
 WINDOW w AS (PARTITION BY ep.expense_id);
 
 -- Solde par membre = ce qu'il a payé - ce qu'il doit.  (> 0 : on lui doit de l'argent)
+-- Un remboursement augmente le solde de celui qui rembourse et diminue celui de celui qui reçoit.
 CREATE VIEW v_balance AS
 SELECT
     m.group_id,
@@ -130,6 +143,10 @@ SELECT
     COALESCE((SELECT SUM(e.amount_cents) FROM Expense e
               WHERE e.group_id = m.group_id AND e.person_id = m.person_id), 0)
   - COALESCE((SELECT SUM(s.share_cents) FROM v_share s
-              WHERE s.member_id = m.id), 0)  AS balance_cents
+              WHERE s.member_id = m.id), 0)
+  + COALESCE((SELECT SUM(r.amount_cents) FROM Refund r
+              WHERE r.from_member_id = m.id), 0)
+  - COALESCE((SELECT SUM(r.amount_cents) FROM Refund r
+              WHERE r.to_member_id = m.id), 0)  AS balance_cents
 FROM Member m
 JOIN Person p ON p.id = m.person_id;

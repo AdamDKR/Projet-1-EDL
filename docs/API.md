@@ -30,6 +30,7 @@ All routes start with `/api`. Requests and responses use JSON, so send the `Cont
 | POST | `/api/groups/<id>/expenses` | Add an expense | 201 |
 | DELETE | `/api/groups/<id>/expenses/<expense_id>` | Delete an expense | 204, no content |
 | GET | `/api/groups/<id>/balances` | Get member balances | 200 |
+| POST | `/api/groups/<id>/refund` | Record a refund between two members | 201 |
 | GET | `/api/accounts` | List user accounts and global balances | 200 |
 | POST | `/api/accounts` | Create a user account | 201 |
 
@@ -137,7 +138,40 @@ The response has the same format as one item of the list below.
 ]
 ```
 
-Display `balance`, which is already formatted. Reload the balances after adding or deleting an expense: the backend computes them on each call.
+Display `balance`, which is already formatted. Reload the balances after adding or deleting an expense or a refund: the backend computes them on each call.
+
+## Record a refund
+
+`POST /api/groups/<id>/refund`: member `payer_id` pays back member `reimbursed_id`.
+
+```json
+{
+  "payer_id": 5,
+  "reimbursed_id": 4,
+  "amount": "10.00",
+  "date": "2026-07-15"
+}
+```
+
+- Both ids are **member** ids of the group, as numbers, and must be different.
+- `date` can be after the end of the stay, but not before its start.
+- A refund raises the payer's balance and lowers the recipient's. After the expense above, Bob refunding 10.00 to Alice gives Alice `+10.00`, Bob `0.00` and Chloé `-10.00`.
+- Refunds are not expenses: they do not appear in `GET /api/groups/<id>/expenses`.
+
+Response:
+
+```json
+{
+  "id": 1,
+  "payer_id": 5,
+  "payer": "Bob",
+  "reimbursed_id": 4,
+  "reimbursed": "Alice",
+  "amount": "10.00",
+  "amount_cents": 1000,
+  "date": "2026-07-15"
+}
+```
 
 ## `fetch` example
 

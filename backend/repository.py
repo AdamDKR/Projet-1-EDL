@@ -161,6 +161,35 @@ def insert_participant(conn, expense_id, member_id):
     )
 
 
+def insert_refund(conn, group_id, from_member_id, to_member_id, amount_cents, date):
+    return conn.execute(
+        """
+        INSERT INTO Refund (group_id, from_member_id, to_member_id, amount_cents, date)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        [group_id, from_member_id, to_member_id, amount_cents, date],
+    ).lastrowid
+
+
+def list_refunds(conn, group_id):
+    rows = conn.execute(
+        """
+        SELECT r.id, r.amount_cents, r.date,
+               r.from_member_id AS payer_id, payer.name AS payer,
+               r.to_member_id AS reimbursed_id, reimbursed.name AS reimbursed
+        FROM Refund r
+        JOIN Member mf ON mf.id = r.from_member_id
+        JOIN Person payer ON payer.id = mf.person_id
+        JOIN Member mt ON mt.id = r.to_member_id
+        JOIN Person reimbursed ON reimbursed.id = mt.person_id
+        WHERE r.group_id = ?
+        ORDER BY r.date, r.id
+        """,
+        [group_id],
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def delete_expense(conn, group_id, expense_id):
     """Renvoie False si la dépense n'existe pas dans ce groupe."""
     # Les participants partent en cascade : le schéma interdit de retirer le dernier à la main.
